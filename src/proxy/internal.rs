@@ -50,7 +50,7 @@ fn spawn_with_trace<T: Send + Sync + 'static>(
     tokio::spawn(fut.instrument(span))
 }
 
-pub(crate) struct InternalProxy<C, CA, H, W> {
+pub struct InternalProxy<C, CA, H, W> {
     pub ca: Arc<CA>,
     pub client: Client<C, Body>,
     pub server: ServerBuilder<TokioExecutor>,
