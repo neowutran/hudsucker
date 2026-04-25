@@ -101,7 +101,7 @@ where
             client_addr = %self.client_addr,
         )
     )]
-    pub(crate) async fn proxy(
+    pub async fn proxy(
         mut self,
         req: Request<Incoming>,
     ) -> Result<Response<Body>, Infallible> {
