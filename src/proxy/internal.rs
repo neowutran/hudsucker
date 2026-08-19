@@ -226,10 +226,16 @@ where
                                         }
                                     };
 
+                                    let mut should_intercept_tls=true;
+                                    if let Some(alpn) = req.headers().get("alpn")                       
+                                                   && String::from_utf8_lossy(alpn.as_bytes()).contains("webrtc")  
+                                                   && buffer[..2] == *b"\x16\x03"{
+                                                       should_intercept_tls = false;
+                                    }
                                     if !self
                                         .http_handler
                                         .should_intercept_tls(&self.context(), start.client_hello())
-                                        .await
+                                        .await || !should_intercept_tls
                                     {
                                         let mut server =
                                             match TcpStream::connect(authority.as_ref()).await {
