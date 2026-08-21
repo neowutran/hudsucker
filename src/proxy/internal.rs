@@ -208,6 +208,7 @@ where
 
                                     return;
                                 } else if buffer[..2] == *b"\x16\x03" {
+                                    /*
                                     let upgraded = Tee::new(upgraded);
 
                                     let mut start = match LazyConfigAcceptor::new(
@@ -225,6 +226,7 @@ where
                                             return;
                                         }
                                     };
+                                    */
                                     let mut should_intercept = true;
                                      if let Some(alpn) = req.headers().get("alpn")
                                     && String::from_utf8_lossy(alpn.as_bytes()).contains("webrtc")
@@ -237,11 +239,12 @@ where
                                     should_intercept = false;
                                  }
 
-
-                                    if !self
+                                    /*if 
+                                        !self
                                         .http_handler
                                         .should_intercept_tls(&self.context(), start.client_hello())
-                                        .await || !should_intercept
+                                        .await ||*/ 
+                                    if !should_intercept
                                     {
                                         println!("not intercepting");
                                         let mut server =
@@ -257,7 +260,7 @@ where
                                             };
 
                                         if let Err(e) = tokio::io::copy_bidirectional(
-                                            &mut start.io,
+                                            &mut upgraded,
                                             &mut server,
                                         )
                                         .await
@@ -270,6 +273,23 @@ where
 
                                         return;
                                     }
+                                    let upgraded = Tee::new(upgraded);
+
+                                    let start = match LazyConfigAcceptor::new(
+                                        tokio_rustls::rustls::server::Acceptor::default(),
+                                        upgraded,
+                                    )
+                                    .await
+                                    {
+                                        Ok(start) => start,
+                                        Err(e) => {
+                                            error!(
+                                                error = &e as &dyn StdError,
+                                                "Failed to read TLS client hello"
+                                            );
+                                            return;
+                                        }
+                                    };
 
                                     let server_config = self
                                         .ca
