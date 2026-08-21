@@ -71,7 +71,7 @@ pub struct ProxyBuilder<T>(T);
 pub struct WantsAddr(());
 
 #[derive(Debug)]
-pub(crate) enum AddrOrListener {
+pub enum AddrOrListener {
     Addr(SocketAddr),
     Listener(TcpListener),
 }

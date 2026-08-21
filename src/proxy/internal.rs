@@ -73,7 +73,7 @@ fn spawn_with_trace<T: Send + Sync + 'static>(
     tokio::spawn(fut.instrument(span))
 }
 
-pub(crate) struct InternalProxy<C, CA, H, W> {
+pub struct InternalProxy<C, CA, H, W> {
     pub ca: Arc<CA>,
     pub client: Client<C, Body>,
     pub server: ServerBuilder<TokioExecutor>,
@@ -124,7 +124,7 @@ where
             client_addr = %self.client_addr,
         )
     )]
-    pub(crate) async fn proxy(
+    pub async fn proxy(
         mut self,
         req: Request<Incoming>,
     ) -> Result<Response<Body>, Infallible> {
@@ -210,7 +210,7 @@ where
                                 } else if buffer[..2] == *b"\x16\x03" {
                                     let upgraded = Tee::new(upgraded);
 
-                                    let start = match LazyConfigAcceptor::new(
+                                    let mut start = match LazyConfigAcceptor::new(
                                         tokio_rustls::rustls::server::Acceptor::default(),
                                         upgraded,
                                     )
@@ -225,12 +225,25 @@ where
                                             return;
                                         }
                                     };
+                                    let mut should_intercept = true;
+                                     if let Some(alpn) = req.headers().get("alpn")
+                                    && String::from_utf8_lossy(alpn.as_bytes()).contains("webrtc")
+                                {
+                                    println!("WEBRTC DETECTED");
+                                    println!("=========>");
+                                    println!("{req:?}");
+                                    println!("{buffer:?}");
+                                    println!("===========");
+                                    should_intercept = false;
+                                 }
+
 
                                     if !self
                                         .http_handler
                                         .should_intercept_tls(&self.context(), start.client_hello())
-                                        .await
+                                        .await || !should_intercept
                                     {
+                                        println!("not intercepting");
                                         let mut server =
                                             match TcpStream::connect(authority.as_ref()).await {
                                                 Ok(server) => server,
@@ -244,7 +257,7 @@ where
                                             };
 
                                         if let Err(e) = tokio::io::copy_bidirectional(
-                                            &mut start.io.rewind(),
+                                            &mut start.io,
                                             &mut server,
                                         )
                                         .await
