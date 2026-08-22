@@ -3,8 +3,7 @@ use async_compression::tokio::bufread::{BrotliDecoder, GzipDecoder, ZlibDecoder,
 use bstr::ByteSlice;
 use futures::Stream;
 use hyper::{
-    Request,
-    Response,
+    Request, Response,
     body::{Body as HttpBody, Bytes},
     header::{CONTENT_ENCODING, CONTENT_LENGTH, HeaderMap, HeaderValue},
 };

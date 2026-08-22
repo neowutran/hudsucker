@@ -9,9 +9,7 @@ use openssl::{
     pkey::{PKey, Private},
     rand,
     x509::{
-        X509,
-        X509Builder,
-        X509NameBuilder,
+        X509, X509Builder, X509NameBuilder,
         extension::{AuthorityKeyIdentifier, ExtendedKeyUsage, KeyUsage, SubjectAlternativeName},
     },
 };

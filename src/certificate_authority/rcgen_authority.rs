@@ -3,15 +3,8 @@ use http::uri::Authority;
 use moka::future::Cache;
 use rand::{RngExt, rng};
 use rcgen::{
-    CertificateParams,
-    DistinguishedName,
-    DnType,
-    ExtendedKeyUsagePurpose,
-    Issuer,
-    KeyPair,
-    KeyUsagePurpose,
-    SanType,
-    string::Ia5String,
+    CertificateParams, DistinguishedName, DnType, ExtendedKeyUsagePurpose, Issuer, KeyPair,
+    KeyUsagePurpose, SanType, string::Ia5String,
 };
 use std::sync::Arc;
 use time::{Duration, OffsetDateTime};

@@ -1,9 +1,5 @@
 use crate::{
-    HttpHandler,
-    NoopHandler,
-    Proxy,
-    WebSocketHandler,
-    certificate_authority::CertificateAuthority,
+    HttpHandler, NoopHandler, Proxy, WebSocketHandler, certificate_authority::CertificateAuthority,
 };
 use hyper_util::{
     client::legacy::{Builder as ClientBuilder, connect::Connect},

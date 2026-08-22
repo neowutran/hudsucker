@@ -2,8 +2,7 @@ use crate::Error;
 use futures::{Stream, TryStream, TryStreamExt};
 use http_body_util::{Collected, Empty, Full, StreamBody, combinators::BoxBody};
 use hyper::{
-    Request,
-    Response,
+    Request, Response,
     body::{Body as HttpBody, Bytes, Frame, Incoming, SizeHint},
 };
 use std::{pin::Pin, task::Poll};

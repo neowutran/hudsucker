@@ -1,9 +1,5 @@
 use crate::{
-    HttpContext,
-    HttpHandler,
-    RequestOrResponse,
-    WebSocketContext,
-    WebSocketHandler,
+    HttpContext, HttpHandler, RequestOrResponse, WebSocketContext, WebSocketHandler,
     body::Body,
     certificate_authority::CertificateAuthority,
     rewind::{ArrayPrefix, Rewind},
@@ -12,14 +8,7 @@ use crate::{
 use futures::{Sink, Stream, StreamExt};
 use http::uri::{Authority, Scheme};
 use hyper::{
-    Method,
-    Request,
-    Response,
-    StatusCode,
-    Uri,
-    body::Incoming,
-    header::Entry,
-    service::service_fn,
+    Method, Request, Response, StatusCode, Uri, body::Incoming, header::Entry, service::service_fn,
     upgrade::Upgraded,
 };
 use hyper_util::{
@@ -31,8 +20,7 @@ use std::{convert::Infallible, error::Error as StdError, io, net::SocketAddr, sy
 use tokio::{io::AsyncReadExt, net::TcpStream, task::JoinHandle};
 use tokio_rustls::{LazyConfigAcceptor, StartHandshake};
 use tokio_tungstenite::{
-    Connector,
-    WebSocketStream,
+    Connector, WebSocketStream,
     tungstenite::{self, Message},
 };
 use tracing::{Instrument, Span, error, info_span, instrument, warn};
@@ -124,10 +112,7 @@ where
             client_addr = %self.client_addr,
         )
     )]
-    pub async fn proxy(
-        mut self,
-        req: Request<Incoming>,
-    ) -> Result<Response<Body>, Infallible> {
+    pub async fn proxy(mut self, req: Request<Incoming>) -> Result<Response<Body>, Infallible> {
         let ctx = self.context();
 
         let req = match self
@@ -208,7 +193,6 @@ where
 
                                     return;
                                 } else if buffer[..2] == *b"\x16\x03" {
-                                    /*
                                     let upgraded = Tee::new(upgraded);
 
                                     let mut start = match LazyConfigAcceptor::new(
@@ -226,25 +210,26 @@ where
                                             return;
                                         }
                                     };
-                                    */
-                                    let mut should_intercept = true;
-                                     if let Some(alpn) = req.headers().get("alpn")
-                                    && String::from_utf8_lossy(alpn.as_bytes()).contains("webrtc")
-                                {
-                                    println!("WEBRTC DETECTED");
-                                    println!("=========>");
-                                    println!("{req:?}");
-                                    println!("{buffer:?}");
-                                    println!("===========");
-                                    should_intercept = false;
-                                 }
 
-                                    /*if 
-                                        !self
+                                    let mut should_intercept = true;
+                                    if let Some(alpn) = req.headers().get("alpn")
+                                        && String::from_utf8_lossy(alpn.as_bytes())
+                                            .to_lowercase()
+                                            .contains("webrtc")
+                                    {
+                                        println!("WEBRTC DETECTED");
+                                        println!("=========>");
+                                        println!("{req:?}");
+                                        println!("{buffer:?}");
+                                        println!("===========");
+                                        should_intercept = false;
+                                    }
+
+                                    if !self
                                         .http_handler
                                         .should_intercept_tls(&self.context(), start.client_hello())
-                                        .await ||*/ 
-                                    if !should_intercept
+                                        .await
+                                        || !should_intercept
                                     {
                                         println!("not intercepting");
                                         let mut server =
@@ -260,7 +245,7 @@ where
                                             };
 
                                         if let Err(e) = tokio::io::copy_bidirectional(
-                                            &mut upgraded,
+                                            &mut start.io,
                                             &mut server,
                                         )
                                         .await
@@ -273,23 +258,6 @@ where
 
                                         return;
                                     }
-                                    let upgraded = Tee::new(upgraded);
-
-                                    let start = match LazyConfigAcceptor::new(
-                                        tokio_rustls::rustls::server::Acceptor::default(),
-                                        upgraded,
-                                    )
-                                    .await
-                                    {
-                                        Ok(start) => start,
-                                        Err(e) => {
-                                            error!(
-                                                error = &e as &dyn StdError,
-                                                "Failed to read TLS client hello"
-                                            );
-                                            return;
-                                        }
-                                    };
 
                                     let server_config = self
                                         .ca
