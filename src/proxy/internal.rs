@@ -18,7 +18,9 @@ use hyper_util::{
 };
 use std::{convert::Infallible, error::Error as StdError, io, net::SocketAddr, sync::Arc};
 use tokio::{io::AsyncReadExt, net::TcpStream, task::JoinHandle};
-use tokio_rustls::{LazyConfigAcceptor, StartHandshake};
+use tokio_rustls::{
+    LazyConfigAcceptor, StartHandshake, TlsAcceptor, TlsConnector, rustls::pki_types::ServerName,
+};
 use tokio_tungstenite::{
     Connector, WebSocketStream,
     tungstenite::{self, Message},
@@ -68,6 +70,7 @@ pub struct InternalProxy<C, CA, H, W> {
     pub http_handler: H,
     pub websocket_handler: W,
     pub websocket_connector: Option<Connector>,
+    pub webrtc_tls_connector: Arc<rustls::ClientConfig>,
     pub client_addr: SocketAddr,
 }
 
@@ -84,6 +87,7 @@ where
             server: self.server.clone(),
             http_handler: self.http_handler.clone(),
             websocket_handler: self.websocket_handler.clone(),
+            webrtc_tls_connector: self.webrtc_tls_connector.clone(),
             websocket_connector: self.websocket_connector.clone(),
             client_addr: self.client_addr,
         }
@@ -155,6 +159,7 @@ where
         match req.uri().authority().cloned() {
             Some(authority) => {
                 let span = info_span!("process_connect");
+                let domain = authority.host().to_string();
                 let fut = async move {
                     match hyper::upgrade::on(&mut req).await {
                         Ok(upgraded) => {
@@ -173,6 +178,7 @@ where
 
                             let prefix = ArrayPrefix::new(buffer, bytes_read);
                             let mut upgraded = Rewind::new(prefix, upgraded);
+                            println!("{:#?}", req);
 
                             if self
                                 .http_handler
@@ -195,7 +201,7 @@ where
                                 } else if buffer[..2] == *b"\x16\x03" {
                                     let upgraded = Tee::new(upgraded);
 
-                                    let mut start = match LazyConfigAcceptor::new(
+                                    let start = match LazyConfigAcceptor::new(
                                         tokio_rustls::rustls::server::Acceptor::default(),
                                         upgraded,
                                     )
@@ -205,11 +211,55 @@ where
                                         Err(e) => {
                                             error!(
                                                 error = &e as &dyn StdError,
-                                                "Failed to read TLS client hello"
+                                                "Failed to read TLS client hello; PASSE 1"
                                             );
                                             return;
                                         }
                                     };
+                                    if !self
+                                        .http_handler
+                                        .should_intercept_tls(&self.context(), start.client_hello())
+                                        .await
+                                    {
+                                        let mut server =
+                                            match TcpStream::connect(authority.as_ref()).await {
+                                                Ok(server) => server,
+                                                Err(e) => {
+                                                    error!(
+                                                        error = &e as &dyn StdError,
+                                                        "Failed to connect to {}; intercept tls",
+                                                        authority
+                                                    );
+                                                    return;
+                                                }
+                                            };
+
+                                        if let Err(e) = tokio::io::copy_bidirectional(
+                                            &mut start.io.rewind(),
+                                            &mut server,
+                                        )
+                                        .await
+                                        {
+                                            error!(
+                                                error = &e as &dyn StdError,
+                                                "Failed to tunnel to {}; intercept tls", authority
+                                            );
+                                        }
+
+                                        return;
+                                    }
+                                    let server_config = self
+                                        .ca
+                                        .gen_server_config(
+                                            start
+                                                .client_hello()
+                                                .server_name()
+                                                .and_then(|name| Authority::try_from(name).ok())
+                                                .as_ref()
+                                                .unwrap_or(&authority),
+                                        )
+                                        .instrument(info_span!("gen_server_config"))
+                                        .await;
 
                                     let mut should_intercept = true;
                                     if let Some(alpn) = req.headers().get("alpn")
@@ -225,53 +275,71 @@ where
                                         should_intercept = false;
                                     }
 
-                                    if !self
-                                        .http_handler
-                                        .should_intercept_tls(&self.context(), start.client_hello())
-                                        .await
-                                        || !should_intercept
-                                    {
+                                    if !should_intercept {
                                         println!("not intercepting");
-                                        let mut server =
-                                            match TcpStream::connect(authority.as_ref()).await {
-                                                Ok(server) => server,
-                                                Err(e) => {
-                                                    error!(
-                                                        error = &e as &dyn StdError,
-                                                        "Failed to connect to {}", authority
-                                                    );
-                                                    return;
-                                                }
-                                            };
-
-                                        if let Err(e) = tokio::io::copy_bidirectional(
-                                            &mut start.io,
-                                            &mut server,
+                                        /*
+                                        let server_config = self
+                                            .ca
+                                            .gen_server_config(&authority)
+                                            .instrument(info_span!("gen_server_config"))
+                                            .await;*/
+                                        let mut client_stream = match TlsAcceptor::from(
+                                            server_config,
                                         )
+                                        .accept(start.io.rewind())
                                         .await
                                         {
-                                            error!(
-                                                error = &e as &dyn StdError,
-                                                "Failed to tunnel to {}", authority
-                                            );
-                                        }
+                                            Ok(stream) => stream,
+                                            Err(e) => {
+                                                error!(
+                                                    "Failed to establish TLS connection: {} ; PASSE 2",
+                                                    e
+                                                );
+                                                return;
+                                            }
+                                        };
 
+                                        match ServerName::try_from(domain.to_owned()) {
+                                            Ok(server_name) => {
+                                                let server_tcp_stream = match TcpStream::connect(
+                                                    authority.as_ref(),
+                                                )
+                                                .await
+                                                {
+                                                    Ok(s) => s,
+                                                    Err(e) => {
+                                                        error!(
+                                                            "Failed to connect to TURN server: {e:?}; PASSE 3"
+                                                        );
+                                                        return;
+                                                    }
+                                                };
+                                                let tls_connector = TlsConnector::from(
+                                                    self.webrtc_tls_connector.clone(),
+                                                );
+                                                let mut server_tls_stream = tls_connector
+                                                    .connect(server_name, server_tcp_stream)
+                                                    .await
+                                                    .unwrap();
+                                                if let Err(e) = tokio::io::copy_bidirectional(
+                                                    &mut client_stream,
+                                                    &mut server_tls_stream,
+                                                )
+                                                .await
+                                                {
+                                                    error!(
+                                                        error = &e as &dyn StdError,
+                                                        "Failed to tunnel to {}; PASSE 4",
+                                                        authority
+                                                    );
+                                                }
+                                            }
+                                            Err(e) => {
+                                                eprintln!("error {e:?} ; PASSE 5");
+                                            }
+                                        }
                                         return;
                                     }
-
-                                    let server_config = self
-                                        .ca
-                                        .gen_server_config(
-                                            start
-                                                .client_hello()
-                                                .server_name()
-                                                .and_then(|name| Authority::try_from(name).ok())
-                                                .as_ref()
-                                                .unwrap_or(&authority),
-                                        )
-                                        .instrument(info_span!("gen_server_config"))
-                                        .await;
-
                                     let stream = match StartHandshake::from_parts(
                                         start.accepted,
                                         start.io.into_inner(),
@@ -295,10 +363,9 @@ where
                                         if !error_is_shutdown(e.as_ref())
                                             && !error_is_unexpected_eof(e.as_ref())
                                         {
-                                            error!(error = &e, "HTTPS connect error");
+                                            error!(error = &e, "HTTPS connect error; PASSE 6");
                                         }
                                     }
-
                                     return;
                                 } else {
                                     warn!(

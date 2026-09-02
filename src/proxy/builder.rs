@@ -134,6 +134,8 @@ impl<CA> ProxyBuilder<WantsClient<CA>> {
         {
             Ok(config) => config.with_webpki_roots().with_no_client_auth(),
             Err(e) => {
+                panic!("error");
+                /*
                 return ProxyBuilder(WantsHandlers {
                     al: self.0.al,
                     ca: self.0.ca,
@@ -145,6 +147,7 @@ impl<CA> ProxyBuilder<WantsClient<CA>> {
                     server: None,
                     graceful_shutdown: pending(),
                 });
+                */
             }
         };
 
@@ -165,53 +168,55 @@ impl<CA> ProxyBuilder<WantsClient<CA>> {
             client: None,
             http_handler: NoopHandler::new(),
             websocket_handler: NoopHandler::new(),
-            websocket_connector: Some(Connector::Rustls(Arc::new(rustls_config))),
+            websocket_connector: Some(Connector::Rustls(Arc::new(rustls_config.clone()))),
+            webrtc_tls_connector: Arc::new(rustls_config),
             server: None,
             graceful_shutdown: pending(),
         })
     }
+    /*
+        /// Use a hyper-tls connector.
+        #[cfg(feature = "native-tls-client")]
+        pub fn with_native_tls_connector(
+            self,
+        ) -> ProxyBuilder<WantsHandlers<CA, impl Connect + Clone, NoopHandler, NoopHandler, Pending<()>>>
+        {
+            use hyper_util::client::legacy::connect::HttpConnector;
 
-    /// Use a hyper-tls connector.
-    #[cfg(feature = "native-tls-client")]
-    pub fn with_native_tls_connector(
-        self,
-    ) -> ProxyBuilder<WantsHandlers<CA, impl Connect + Clone, NoopHandler, NoopHandler, Pending<()>>>
-    {
-        use hyper_util::client::legacy::connect::HttpConnector;
+            let tls_connector = match hyper_tls::native_tls::TlsConnector::new() {
+                Ok(tls_connector) => tls_connector,
+                Err(e) => {
+                    return ProxyBuilder(WantsHandlers {
+                        al: self.0.al,
+                        ca: self.0.ca,
+                        http_connector: Err(Error::from(e)),
+                        client: None,
+                        http_handler: NoopHandler::new(),
+                        websocket_handler: NoopHandler::new(),
+                        websocket_connector: None,
+                        server: None,
+                        graceful_shutdown: pending(),
+                    });
+                }
+            };
 
-        let tls_connector = match hyper_tls::native_tls::TlsConnector::new() {
-            Ok(tls_connector) => tls_connector,
-            Err(e) => {
-                return ProxyBuilder(WantsHandlers {
-                    al: self.0.al,
-                    ca: self.0.ca,
-                    http_connector: Err(Error::from(e)),
-                    client: None,
-                    http_handler: NoopHandler::new(),
-                    websocket_handler: NoopHandler::new(),
-                    websocket_connector: None,
-                    server: None,
-                    graceful_shutdown: pending(),
-                });
-            }
-        };
+            let tokio_tls_connector = tokio_native_tls::TlsConnector::from(tls_connector.clone());
+            let https = hyper_tls::HttpsConnector::from((HttpConnector::new(), tokio_tls_connector));
 
-        let tokio_tls_connector = tokio_native_tls::TlsConnector::from(tls_connector.clone());
-        let https = hyper_tls::HttpsConnector::from((HttpConnector::new(), tokio_tls_connector));
-
-        ProxyBuilder(WantsHandlers {
-            al: self.0.al,
-            ca: self.0.ca,
-            http_connector: Ok(https),
-            client: None,
-            http_handler: NoopHandler::new(),
-            websocket_handler: NoopHandler::new(),
-            websocket_connector: Some(Connector::NativeTls(tls_connector)),
-            server: None,
-            graceful_shutdown: pending(),
-        })
-    }
-
+            ProxyBuilder(WantsHandlers {
+                al: self.0.al,
+                ca: self.0.ca,
+                http_connector: Ok(https),
+                client: None,
+                http_handler: NoopHandler::new(),
+                websocket_handler: NoopHandler::new(),
+                websocket_connector: Some(Connector::NativeTls(tls_connector)),
+                server: None,
+                graceful_shutdown: pending(),
+            })
+        }
+    */
+    /*
     /// Use a custom connector.
     pub fn with_http_connector<C>(
         self,
@@ -231,7 +236,7 @@ impl<CA> ProxyBuilder<WantsClient<CA>> {
             server: None,
             graceful_shutdown: pending(),
         })
-    }
+    }*/
 }
 
 /// Builder state that can take additional handlers.
@@ -244,6 +249,7 @@ pub struct WantsHandlers<CA, C, H, W, F> {
     websocket_handler: W,
     websocket_connector: Option<Connector>,
     server: Option<ServerBuilder<TokioExecutor>>,
+    webrtc_tls_connector: Arc<rustls::ClientConfig>,
     graceful_shutdown: F,
 }
 
@@ -261,6 +267,7 @@ impl<CA, C, H, W, F> ProxyBuilder<WantsHandlers<CA, C, H, W, F>> {
             http_handler,
             websocket_handler: self.0.websocket_handler,
             websocket_connector: self.0.websocket_connector,
+            webrtc_tls_connector: self.0.webrtc_tls_connector,
             server: self.0.server,
             graceful_shutdown: self.0.graceful_shutdown,
         })
@@ -279,6 +286,7 @@ impl<CA, C, H, W, F> ProxyBuilder<WantsHandlers<CA, C, H, W, F>> {
             http_handler: self.0.http_handler,
             websocket_handler,
             websocket_connector: self.0.websocket_connector,
+            webrtc_tls_connector: self.0.webrtc_tls_connector,
             server: self.0.server,
             graceful_shutdown: self.0.graceful_shutdown,
         })
@@ -321,6 +329,7 @@ impl<CA, C, H, W, F> ProxyBuilder<WantsHandlers<CA, C, H, W, F>> {
             http_handler: self.0.http_handler,
             websocket_handler: self.0.websocket_handler,
             websocket_connector: self.0.websocket_connector,
+            webrtc_tls_connector: self.0.webrtc_tls_connector,
             server: self.0.server,
             graceful_shutdown,
         })
@@ -341,6 +350,7 @@ impl<CA, C, H, W, F> ProxyBuilder<WantsHandlers<CA, C, H, W, F>> {
             websocket_connector: self.0.websocket_connector,
             server: self.0.server,
             graceful_shutdown: self.0.graceful_shutdown,
+            webrtc_tls_connector: self.0.webrtc_tls_connector,
         })
     }
 }

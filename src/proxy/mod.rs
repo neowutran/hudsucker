@@ -75,6 +75,7 @@ pub struct Proxy<C, CA, H, W, F> {
     http_handler: H,
     websocket_handler: W,
     websocket_connector: Option<Connector>,
+    webrtc_tls_connector: Arc<rustls::ClientConfig>,
     server: Option<ServerBuilder<TokioExecutor>>,
     graceful_shutdown: F,
 }
@@ -145,6 +146,7 @@ where
                     let http_handler = self.http_handler.clone();
                     let websocket_handler = self.websocket_handler.clone();
                     let websocket_connector = self.websocket_connector.clone();
+                    let webrtc_tls_connector = self.webrtc_tls_connector.clone();
 
                     shutdown.spawn_task_fn(move |guard| async move {
                         let conn = server.serve_connection_with_upgrades(
@@ -157,6 +159,7 @@ where
                                     http_handler: http_handler.clone(),
                                     websocket_handler: websocket_handler.clone(),
                                     websocket_connector: websocket_connector.clone(),
+                                    webrtc_tls_connector: webrtc_tls_connector.clone(),
                                     client_addr,
                                 }
                                 .proxy(req)
