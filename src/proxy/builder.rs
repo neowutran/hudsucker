@@ -132,7 +132,7 @@ impl<CA> ProxyBuilder<WantsClient<CA>> {
         let rustls_config = match ClientConfig::builder_with_provider(Arc::new(provider))
             .with_safe_default_protocol_versions()
         {
-            Ok(config) => config.with_webpki_roots().with_no_client_auth(),
+            Ok(config) => config.with_native_roots().unwrap().with_no_client_auth(),
             Err(e) => {
                 panic!("error");
                 /*
