@@ -178,7 +178,7 @@ where
 
                             let prefix = ArrayPrefix::new(buffer, bytes_read);
                             let mut upgraded = Rewind::new(prefix, upgraded);
-                            println!("{:#?}", req);
+                            //println!("{:#?}", req);
 
                             if self
                                 .http_handler
@@ -209,7 +209,7 @@ where
                                         Err(e) => {
                                             error!(
                                                 error = &e as &dyn StdError,
-                                                "Failed to read TLS client hello; PASSE 1"
+                                                "Failed to read TLS client hello;"
                                             );
                                             return;
                                         }
@@ -265,16 +265,18 @@ where
                                             .to_lowercase()
                                             .contains("webrtc")
                                     {
+                                        /*
                                         println!("WEBRTC DETECTED");
                                         println!("=========>");
                                         println!("{req:?}");
                                         println!("{buffer:?}");
                                         println!("===========");
+                                        */
                                         should_intercept = false;
                                     }
 
                                     if !should_intercept {
-                                        println!("not intercepting");
+                                        //println!("not intercepting");
                                         /*
                                         let server_config = self
                                             .ca
@@ -290,7 +292,7 @@ where
                                             Ok(stream) => stream,
                                             Err(e) => {
                                                 error!(
-                                                    "Failed to establish TLS connection: {} ; PASSE 2",
+                                                    "Failed to establish TLS connection: {} ; ",
                                                     e
                                                 );
                                                 return;
@@ -307,7 +309,7 @@ where
                                                     Ok(s) => s,
                                                     Err(e) => {
                                                         error!(
-                                                            "Failed to connect to TURN server: {e:?}; PASSE 3"
+                                                            "Failed to connect to TURN server: {e:?};"
                                                         );
                                                         return;
                                                     }
@@ -327,13 +329,13 @@ where
                                                 {
                                                     error!(
                                                         error = &e as &dyn StdError,
-                                                        "Failed to tunnel to {}; PASSE 4",
+                                                        "Failed to tunnel to {};",
                                                         authority
                                                     );
                                                 }
                                             }
                                             Err(e) => {
-                                                eprintln!("error {e:?} ; PASSE 5");
+                                                eprintln!("error {e:?} ;");
                                             }
                                         }
                                         return;
